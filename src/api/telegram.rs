@@ -18,18 +18,23 @@ impl Telegram {
 
 impl Api for Telegram {
     async fn push(&self, message: &UndoneList) -> Result<()> {
+        if message.undone_list.is_empty() {
+            return Ok(());
+        }
         let mut msg = String::new();
-        message.undone_list.iter().for_each(|item| {
-            msg.push_str(
-                &urlencoding::encode(
+        msg.push_str(&urlencoding::encode("【❤️小助手提醒你写作业啦！】\n\n"));
+        message.undone_list.clone().into_iter().for_each(|item| {
+            msg.push_str(&urlencoding::encode(
+                if let Some(course_info) = &item.course_info {
                     format!(
-                        "Activity: {}\nEnd Time: {}\n\n",
-                        item.activity_name, item.end_time
+                        "【{}】 【{}】\nDDL：【{}】\n\n",
+                        course_info.name, item.activity_name, item.end_time,
                     )
-                    .as_str(),
-                )
-                .into_owned(),
-            );
+                } else {
+                    format!("【{}】\nDDL：【{}】\n\n", item.activity_name, item.end_time)
+                }
+                .as_str(),
+            ));
         });
 
         let url = format!(

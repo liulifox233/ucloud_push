@@ -29,8 +29,34 @@ fn start() {
 }
 
 #[event(fetch)]
-async fn fetch(_req: Request, _env: Env, _ctx: Context) -> Result<Response> {
-    Response::ok("Hello World")
+async fn fetch(_req: Request, env: Env, _ctx: Context) -> Result<Response> {
+    let ucloud = ucloud::UCloud::new(
+        env.secret("USERNAME").unwrap().to_string(),
+        env.secret("PASSWORD").unwrap().to_string(),
+        env.secret("API_URL").unwrap().to_string(),
+    );
+    let db = env.d1("DB").unwrap();
+
+    let undone_list = ucloud.get_undone_list().await.unwrap();
+    info!("undone_list: {:?}", undone_list);
+
+    let unpushed_list = db::filter_pushed_undone_list(&undone_list, &db)
+        .await
+        .unwrap();
+
+    // push to telegram
+    let bot = api::telegram::Telegram::new(
+        env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
+        env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
+    );
+    bot.push(&unpushed_list).await.unwrap();
+
+    // save to database
+    db::save_activities_batch(&unpushed_list.undone_list, &db)
+        .await
+        .unwrap();
+
+    Response::ok("Success")
 }
 
 #[event(scheduled)]

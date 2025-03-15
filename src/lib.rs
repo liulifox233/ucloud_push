@@ -29,7 +29,7 @@ fn start() {
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    if req.method() != Method::Get {
+    if req.method() != Method::Get && req.method() != Method::Post {
         return Response::error("Method Not Allowed", 405);
     }
 
@@ -43,7 +43,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .first()
     {
         Some(&"ping") => Response::ok("pong"),
-        Some(&"push") => {
+        Some(&"push") | Some(&"telegram") => {
             push(env).await?;
             Response::ok("Success")
         }
@@ -51,6 +51,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             let ticktick = api::ticktick::TickTick::new(
                 env.secret("TICKTICK_CLIENT_ID").unwrap().to_string(),
                 env.secret("TICKTICK_CLIENT_SECRET").unwrap().to_string(),
+                env.secret("TICKTICK_PROJECT_ID").unwrap().to_string(),
                 kv.clone(),
             )
             .await;
@@ -66,6 +67,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             let ticktick = api::ticktick::TickTick::new(
                 env.secret("TICKTICK_CLIENT_ID").unwrap().to_string(),
                 env.secret("TICKTICK_CLIENT_SECRET").unwrap().to_string(),
+                env.secret("TICKTICK_PROJECT_ID").unwrap().to_string(),
                 kv.clone(),
             )
             .await;
@@ -120,6 +122,7 @@ async fn push(env: worker::Env) -> Result<()> {
     let ticktick = api::ticktick::TickTick::new(
         env.secret("TICKTICK_CLIENT_ID").unwrap().to_string(),
         env.secret("TICKTICK_CLIENT_SECRET").unwrap().to_string(),
+        env.secret("TICKTICK_PROJECT_ID").unwrap().to_string(),
         kv.clone(),
     )
     .await;

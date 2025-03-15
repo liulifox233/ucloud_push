@@ -11,15 +11,22 @@ use worker::{RequestInit, Url};
 pub struct TickTick {
     client_id: String,
     client_secret: String,
+    project_id: String,
     pub access_token: Option<String>,
 }
 
 impl TickTick {
-    pub async fn new(client_id: String, client_secret: String, kv: KvStore) -> Self {
+    pub async fn new(
+        client_id: String,
+        client_secret: String,
+        project_id: String,
+        kv: KvStore,
+    ) -> Self {
         let access_token = kv.get("access_token").text().await.unwrap();
         Self {
             client_id,
             client_secret,
+            project_id,
             access_token,
         }
     }
@@ -38,7 +45,7 @@ impl TickTick {
             .unwrap();
 
         let redirect_url = &format!(
-            "https://dida365.com/oauth/authorize?scope=tasks:write&client_id={}&state={}&redirect_uri={redirect_uri}&response_type=code",
+            "https://dida365.com/oauth/authorize?scope=tasks:write,tasks:read&client_id={}&state={}&redirect_uri={redirect_uri}&response_type=code",
             self.client_id, state
         );
 
@@ -72,7 +79,7 @@ impl TickTick {
         )?;
 
         let body = format!(
-            "code={}&grant_type=authorization_code&scope=tasks:write&redirect_uri={}",
+            "code={}&grant_type=authorization_code&scope=tasks:write,tasks:read&redirect_uri={}",
             code, redirect_uri
         );
 
@@ -100,6 +107,38 @@ impl TickTick {
             .unwrap();
         Ok(())
     }
+
+    pub async fn get_project(&self, name: &str) -> Result<i32> {
+        let url = "https://dida365.com/open/v1/project";
+
+        let mut headers = worker::Headers::new();
+        headers.append("Content-Type", "application/json")?;
+        headers.append(
+            "Authorization",
+            &format!("Bearer {}", self.access_token.as_ref().unwrap()),
+        )?;
+
+        let request = Request::new_with_init(
+            url,
+            &RequestInit {
+                headers,
+                method: worker::Method::Get,
+                ..Default::default()
+            },
+        )?;
+
+        let mut response = Fetch::Request(request).send().await?;
+        let projects: serde_json::Value = response.json().await?;
+
+        let project = projects
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"].as_str().unwrap() == name)
+            .unwrap();
+
+        Ok(project["id"].as_i64().unwrap() as i32)
+    }
 }
 
 impl Api for TickTick {
@@ -111,11 +150,17 @@ impl Api for TickTick {
         for undone_item in &message.undone_list {
             let task = Task {
                 title: undone_item.activity_name.clone(),
+                project_id: self.project_id.clone(),
                 start_date: Some(
-                    chrono::Utc::now()
-                        .with_timezone(&chrono::FixedOffset::east_opt(8 * 3600).unwrap())
-                        .format("%Y-%m-%dT%H:%M:%S%z")
-                        .to_string(),
+                    chrono::NaiveDateTime::parse_from_str(
+                        &undone_item.start_time.clone().unwrap(),
+                        "%Y-%m-%d %H:%M",
+                    )
+                    .unwrap()
+                    .and_local_timezone(chrono::FixedOffset::east_opt(8 * 3600).unwrap())
+                    .unwrap()
+                    .format("%Y-%m-%dT%H:%M:%S%z")
+                    .to_string(),
                 ),
                 due_date: {
                     Some(
@@ -131,10 +176,17 @@ impl Api for TickTick {
                     )
                 },
                 content: {
-                    undone_item
-                        .course_info
-                        .clone()
-                        .and_then(|ci| Some(format!("课程：{}\n教师：{}", ci.name, ci.teachers)))
+                    let content = undone_item.description.clone();
+                    if let Some(ci) = &undone_item.course_info {
+                        Some(format!(
+                            "课程：{}\n教师：{}\n\n{}\n",
+                            ci.name,
+                            ci.teachers,
+                            content.unwrap_or_default()
+                        ))
+                    } else {
+                        content
+                    }
                 },
             };
 

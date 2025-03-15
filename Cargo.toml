@@ -32,3 +32,4 @@ urlencoding = "2.1.3"
 getrandom = { version = "0.3.1", features = ["wasm_js"] }
 base64 = "0.22.1"
 chrono = { version = "0.4.40", features = ["serde"] }
+htmd = "0.1.6"

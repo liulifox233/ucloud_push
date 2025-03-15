@@ -83,15 +83,17 @@ pub async fn save_activities_batch(
 
         for (i, item) in chunk.iter().enumerate() {
             placeholders.push(format!(
-                "(?{}, ?{}, ?{}, ?{}, ?{}, ?{}, ?{}, ?{})",
-                i * 8 + 1,
-                i * 8 + 2,
-                i * 8 + 3,
-                i * 8 + 4,
-                i * 8 + 5,
-                i * 8 + 6,
-                i * 8 + 7,
-                i * 8 + 8
+                "(?{}, ?{}, ?{}, ?{}, ?{}, ?{}, ?{}, ?{}, ?{}, ?{})",
+                i * 10 + 1,
+                i * 10 + 2,
+                i * 10 + 3,
+                i * 10 + 4,
+                i * 10 + 5,
+                i * 10 + 6,
+                i * 10 + 7,
+                i * 10 + 8,
+                i * 10 + 9,
+                i * 10 + 10
             ));
 
             let course_info = item
@@ -109,6 +111,8 @@ pub async fn save_activities_batch(
                 item.evaluation_status.into(),
                 item.is_open_evaluation.into(),
                 course_info.into(),
+                item.description.clone().unwrap_or_default().into(),
+                item.start_time.clone().unwrap_or_default().into(),
             ]);
         }
 
@@ -116,7 +120,7 @@ pub async fn save_activities_batch(
             "INSERT OR IGNORE INTO activities (
                 activity_id, activity_name, type, end_time,
                 assignment_type, evaluation_status, 
-                is_open_evaluation, course_info
+                is_open_evaluation, course_info, description, start_time
             ) VALUES {}
             ON CONFLICT(activity_id) DO UPDATE SET
                 end_time = excluded.end_time,

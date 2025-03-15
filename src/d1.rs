@@ -136,6 +136,11 @@ pub async fn save_activities_batch(
     Ok(())
 }
 
+pub async fn cleanup_activities(db: &D1Database) -> worker::Result<()> {
+    db.exec("DELETE FROM activities").await?;
+    Ok(())
+}
+
 pub async fn save_state(state: &str, db: &D1Database) -> worker::Result<()> {
     let stmts = vec![db
         .prepare("INSERT OR REPLACE INTO state state VALUES ?1")

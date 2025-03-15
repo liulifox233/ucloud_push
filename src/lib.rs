@@ -28,7 +28,7 @@ fn start() {
 }
 
 #[event(fetch)]
-async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if req.method() != Method::Get && req.method() != Method::Post {
         return Response::error("Method Not Allowed", 405);
     }
@@ -43,9 +43,48 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .first()
     {
         Some(&"ping") => Response::ok("pong"),
-        Some(&"push") | Some(&"telegram") => {
+        Some(&"push") => {
             push(env).await?;
             Response::ok("Success")
+        }
+        Some(&"telegram") => {
+            let body = req.text().await?;
+            let parsed: serde_json::Value = serde_json::from_str(&body)?;
+
+            let allowed_id = env
+                .secret("TELEGRAM_ALLOWED_USER_ID")?
+                .to_string()
+                .parse::<i64>()
+                .unwrap();
+            let user_id = parsed["message"]["from"]["id"].as_i64().unwrap();
+
+            if user_id != allowed_id {
+                return Response::error("Unauthorized", 401);
+            }
+
+            let message_text = parsed["message"]["text"]
+                .as_str()
+                .ok_or_else(|| worker::Error::from("Missing message text"))?;
+
+            match message_text {
+                "/push" => {
+                    push(env).await?;
+                    Response::ok("Push triggered")
+                }
+                "/clear" => {
+                    let bot = api::telegram::Telegram::new(
+                        env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
+                        env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
+                    );
+
+                    let db = env.d1("DB").unwrap();
+                    d1::cleanup_activities(&db).await.unwrap();
+
+                    bot.send("Database cleared").await.unwrap();
+                    Response::ok("Database cleared")
+                }
+                _ => Response::ok("Unknown command"),
+            }
         }
         Some(&"auth") => {
             let ticktick = api::ticktick::TickTick::new(

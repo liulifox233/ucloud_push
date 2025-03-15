@@ -5,6 +5,11 @@ compatibility_date = "2025-03-14"
 [build]
 command = "worker-build --release"
 
+[[kv_namespaces]]
+binding = "KV"
+preview_id = "xxx"
+id = "xxx"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "xxx"

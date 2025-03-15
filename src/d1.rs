@@ -131,3 +131,23 @@ pub async fn save_activities_batch(
     db.batch(stmts).await?;
     Ok(())
 }
+
+pub async fn save_state(state: &str, db: &D1Database) -> worker::Result<()> {
+    let stmts = vec![db
+        .prepare("INSERT OR REPLACE INTO state state VALUES ?1")
+        .bind(&[state.into()])?];
+    db.batch(stmts).await?;
+    Ok(())
+}
+
+pub async fn get_state(db: &D1Database) -> worker::Result<Option<String>> {
+    let rows = db
+        .batch(vec![db.prepare("SELECT state FROM state")])
+        .await?[0]
+        .results::<(String,)>()?;
+    if let Some((state,)) = rows.into_iter().next() {
+        Ok(Some(state))
+    } else {
+        Ok(None)
+    }
+}

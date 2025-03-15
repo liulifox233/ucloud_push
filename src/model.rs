@@ -35,3 +35,12 @@ pub struct CourseInfo {
     pub name: String,
     pub teachers: String,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Task {
+    pub title: String,
+    pub start_date: Option<String>,
+    pub due_date: Option<String>,
+    pub content: Option<String>,
+}

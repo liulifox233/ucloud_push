@@ -1,6 +1,6 @@
 use crate::model::{self, Detail, UndoneList};
 use anyhow::Result;
-use htmd::{Element, HtmlToMarkdown};
+use htmd::HtmlToMarkdown;
 
 pub struct UCloud {
     username: String,

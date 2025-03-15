@@ -2,12 +2,20 @@ use crate::model::UndoneList;
 
 use super::Api;
 use anyhow::Result;
+use serde::Serialize;
 use tracing::info;
-use worker::{Fetch, Request};
+use worker::{Fetch, Headers, Method, Request, RequestInit};
 
 pub struct Telegram {
     token: String,
     chat_id: String,
+}
+
+#[derive(Serialize)]
+struct TelegramMessage<'a> {
+    chat_id: &'a str,
+    text: &'a str,
+    parse_mode: &'a str,
 }
 
 impl Telegram {
@@ -16,15 +24,25 @@ impl Telegram {
     }
 
     pub async fn send(&self, message: &str) -> Result<()> {
-        let url = &format!(
-            "https://api.telegram.org/bot{}/sendMessage?chat_id={}&text={}",
-            self.token,
-            self.chat_id,
-            urlencoding::encode(message)
-        )
-        .to_string();
+        let url = &format!("https://api.telegram.org/bot{}/sendMessage", self.token).to_string();
 
-        let request = Request::new(&url, worker::Method::Get).unwrap();
+        let message_body = TelegramMessage {
+            chat_id: &self.chat_id,
+            text: message,
+            parse_mode: "MarkdownV2",
+        };
+        let body = serde_json::to_string(&message_body)
+            .map_err(|e| worker::Error::RustError(format!("Serialization failed: {}", e)))?;
+        let mut headers = Headers::new();
+        headers.append("Content-Type", "application/json")?;
+
+        let request_init = RequestInit {
+            method: Method::Post,
+            headers,
+            body: Some(body.into()),
+            ..Default::default()
+        };
+        let request = Request::new_with_init(&url, &request_init)?;
         let response = Fetch::Request(request).send().await?;
         info!("telegram push result: {:?}", response);
         Ok(())
@@ -32,27 +50,36 @@ impl Telegram {
 }
 
 impl Api for Telegram {
-    async fn push(&self, message: &UndoneList) -> Result<()> {
-        if message.undone_list.is_empty() {
+    async fn push(&self, undone_list: &UndoneList) -> Result<()> {
+        if undone_list.undone_list.is_empty() {
             return Ok(());
         }
-        let mut msg = String::new();
-        msg.push_str("【❤️小助手提醒你写作业啦！】\n\n");
-        message.undone_list.clone().into_iter().for_each(|item| {
+        for item in &undone_list.undone_list {
+            info!("pushing message: {:?}", item);
+            let mut msg = String::new();
+            msg.push_str("# ❤️小助手提醒你写作业啦！\n\n");
+
             msg.push_str(
                 if let Some(course_info) = &item.course_info {
                     format!(
-                        "【{}】 【{}】\nDDL：【{}】\n\n",
+                        "- **课程**：{}\n- **作业**：{}\n- **DDL**：【{}】",
                         course_info.name, item.activity_name, item.end_time,
                     )
                 } else {
-                    format!("【{}】\nDDL：【{}】\n\n", item.activity_name, item.end_time)
+                    format!(
+                        "- **作业**：{}\n- **DDL**：【{}】",
+                        item.activity_name, item.end_time,
+                    )
                 }
                 .as_str(),
             );
-        });
 
-        self.send(&msg).await?;
+            if let Some(description) = &item.description {
+                msg.push_str(format!("\n\n## 详细：\n{}", description).as_str());
+            }
+
+            self.send(&msg).await?;
+        }
         Ok(())
     }
 }

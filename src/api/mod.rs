@@ -1,3 +1,4 @@
+pub mod lark;
 pub mod telegram;
 pub mod ticktick;
 

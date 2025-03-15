@@ -29,7 +29,7 @@ impl Telegram {
         let message_body = TelegramMessage {
             chat_id: &self.chat_id,
             text: message,
-            parse_mode: "MarkdownV2",
+            parse_mode: "Markdown",
         };
         let body = serde_json::to_string(&message_body)
             .map_err(|e| worker::Error::RustError(format!("Serialization failed: {}", e)))?;
@@ -43,8 +43,13 @@ impl Telegram {
             ..Default::default()
         };
         let request = Request::new_with_init(&url, &request_init)?;
-        let response = Fetch::Request(request).send().await?;
-        info!("telegram push result: {:?}", response);
+        let mut response = Fetch::Request(request).send().await?;
+        let res = response.json::<serde_json::Value>().await?;
+        if res["ok"].as_bool().unwrap() {
+            info!("telegram push success: {:?}", res);
+        } else {
+            info!("telegram push failed: {:?}", res);
+        }
         Ok(())
     }
 }
@@ -57,25 +62,32 @@ impl Api for Telegram {
         for item in &undone_list.undone_list {
             info!("pushing message: {:?}", item);
             let mut msg = String::new();
-            msg.push_str("# ❤️小助手提醒你写作业啦！\n\n");
+            msg.push_str("*❤️小助手提醒你写作业啦！*\n\n");
 
             msg.push_str(
                 if let Some(course_info) = &item.course_info {
                     format!(
-                        "- **课程**：{}\n- **作业**：{}\n- **DDL**：【{}】",
+                        "*课程*：{}\n*作业*：{}\n*DDL*：{}",
                         course_info.name, item.activity_name, item.end_time,
                     )
                 } else {
-                    format!(
-                        "- **作业**：{}\n- **DDL**：【{}】",
-                        item.activity_name, item.end_time,
-                    )
+                    format!("*作业*：{}\n*DDL*：{}", item.activity_name, item.end_time,)
                 }
                 .as_str(),
             );
 
             if let Some(description) = &item.description {
-                msg.push_str(format!("\n\n## 详细：\n{}", description).as_str());
+                let cleaned_description = regex::Regex::new(r"!\[.*?\]\(.*?\)")
+                    .unwrap()
+                    .replace_all(description, "")
+                    .to_string();
+
+                let cleaned_description = cleaned_description.replace("# ", "");
+                let cleaned_description = cleaned_description.replace("#", "");
+                let cleaned_description = cleaned_description.replace("**", "*");
+                if !cleaned_description.trim().is_empty() {
+                    msg.push_str(format!("\n\n*详细：*\n\n{}", cleaned_description).as_str());
+                }
             }
 
             self.send(&msg).await?;

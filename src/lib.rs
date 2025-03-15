@@ -56,15 +56,19 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 .to_string()
                 .parse::<i64>()
                 .unwrap();
+            if parsed.get("message").is_none() {
+                return Response::ok("Not a message");
+            }
             let user_id = parsed["message"]["from"]["id"].as_i64().unwrap();
 
             if user_id != allowed_id {
                 return Response::error("Unauthorized", 401);
             }
 
-            let message_text = parsed["message"]["text"]
-                .as_str()
-                .ok_or_else(|| worker::Error::from("Missing message text"))?;
+            let message_text = match parsed["message"]["text"].as_str() {
+                Some(text) => text,
+                None => return Response::ok("No text"),
+            };
 
             match message_text {
                 "/push" => {
@@ -149,6 +153,10 @@ async fn push(env: worker::Env) -> Result<()> {
     let unpushed_list = d1::filter_pushed_undone_list(&undone_list, &db)
         .await
         .unwrap();
+
+    // push to lark
+    let lark = api::lark::Lark::new(env.secret("LARK_COOKIE").unwrap().to_string());
+    lark.push(&undone_list).await.unwrap();
 
     // push to telegram
     let bot = api::telegram::Telegram::new(

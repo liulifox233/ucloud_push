@@ -48,8 +48,12 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
             let parsed: serde_json::Value = serde_json::from_str(&body)?;
 
             let bot_token = env.secret("TELEGRAM_TOKEN")?.to_string();
-            if req.headers().get("X-Telegram-Bot-Api-Secret-Token")? != Some(bot_token) {
-                return Response::error("Unauthorized", 401);
+            match req.headers().get("X-Telegram-Bot-Api-Secret-Token")? {
+                Some(token) if token != bot_token => {
+                    error!("Unauthorized: {}", token);
+                    return Response::error("Unauthorized", 401);
+                }
+                _ => {}
             }
 
             let allowed_id = env
@@ -95,18 +99,16 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                         kv.clone(),
                     )
                     .await;
+                    let bot = api::telegram::Telegram::new(
+                        env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
+                        env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
+                    );
 
                     ticktick
-                        .login(
-                            &api::telegram::Telegram::new(
-                                env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
-                                env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
-                            ),
-                            &env.secret("REDIRECT_URI").unwrap().to_string(),
-                            kv,
-                        )
+                        .login(&bot, &env.secret("REDIRECT_URI").unwrap().to_string(), kv)
                         .await
                         .unwrap();
+                    bot.send("Refresh triggered").await.unwrap();
                     Response::ok("Refresh triggered")
                 }
                 _ => Response::ok("Unknown command"),

@@ -75,6 +75,14 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
             };
 
             match message_text {
+                "/ping" => {
+                    let bot = api::telegram::Telegram::new(
+                        env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
+                        env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
+                    );
+                    bot.send_message("呜，别敲啦!").await.unwrap();
+                    return Response::ok("pong");
+                }
                 "/push" => {
                     push(env).await?;
                     Response::ok("Push triggered")
@@ -86,7 +94,7 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                         env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
                         env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
                     )
-                    .send("Database cleared")
+                    .send_message("已经清理干净啦!")
                     .await
                     .unwrap();
                     Response::ok("Database cleared")
@@ -108,7 +116,6 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                         .login(&bot, &env.secret("REDIRECT_URI").unwrap().to_string(), kv)
                         .await
                         .unwrap();
-                    bot.send("Refresh triggered").await.unwrap();
                     Response::ok("Refresh triggered")
                 }
                 _ => Response::ok("Unknown command"),

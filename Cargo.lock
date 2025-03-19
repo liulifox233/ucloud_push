@@ -398,6 +398,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "html5tokenizer"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f0913f97f19bf45cdef63d2cb153c388ef57267984d7a15a4ef678e0da29afe"
+
+[[package]]
 name = "http"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1752,6 +1758,7 @@ dependencies = [
  "console_error_panic_hook",
  "getrandom 0.3.1",
  "htmd",
+ "html5tokenizer",
  "http",
  "lazy_static",
  "regex",

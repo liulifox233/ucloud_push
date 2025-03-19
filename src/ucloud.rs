@@ -1,6 +1,5 @@
 use crate::model::{self, Detail, UndoneList};
 use anyhow::Result;
-use htmd::HtmlToMarkdown;
 
 pub struct UCloud {
     username: String,
@@ -29,16 +28,11 @@ impl UCloud {
             .json()
             .await?;
 
-        let converter = HtmlToMarkdown::builder().build();
-
         for item in &mut undone_list.undone_list {
             let detail = self.get_detail(&item.activity_id).await?;
-            let desc = converter
-                .convert(&detail.assignment_content)
-                .unwrap()
-                .replace("![](", "\n![](");
-            item.description = Some(desc);
+            item.description = Some(detail.assignment_content);
             item.start_time = Some(detail.assignment_begin_time);
+            item.is_overtime_commit = Some(detail.is_overtime_commit == 0)
         }
         Ok(undone_list)
     }

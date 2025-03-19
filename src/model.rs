@@ -32,6 +32,8 @@ pub struct UndoneListItem {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_overtime_commit: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -50,7 +50,7 @@ impl TickTick {
         );
 
         let message = format!("请点击链接登录滴答清单：{}", redirect_url);
-        bot.send(&message).await?;
+        bot.send_message(&message).await?;
         Ok(())
     }
 
@@ -177,15 +177,18 @@ impl Api for TickTick {
                 },
                 content: {
                     let content = undone_item.description.clone();
+
+                    let md = htmd::HtmlToMarkdown::new()
+                        .convert(&content.unwrap_or_default())
+                        .unwrap_or_default()
+                        .replace("![", "\n![");
                     if let Some(ci) = &undone_item.course_info {
                         Some(format!(
                             "课程：{}\n教师：{}\n\n{}\n",
-                            ci.name,
-                            ci.teachers,
-                            content.unwrap_or_default()
+                            ci.name, ci.teachers, md
                         ))
                     } else {
-                        content
+                        Some(md)
                     }
                 },
             };

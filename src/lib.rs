@@ -43,13 +43,14 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .first()
     {
         Some(&"ping") => Response::ok("pong"),
-        Some(&"push") => {
-            push(env).await?;
-            Response::ok("Success")
-        }
         Some(&"telegram") => {
             let body = req.text().await?;
             let parsed: serde_json::Value = serde_json::from_str(&body)?;
+
+            let bot_token = env.secret("TELEGRAM_TOKEN")?.to_string();
+            if req.headers().get("X-Telegram-Bot-Api-Secret-Token")? != Some(bot_token) {
+                return Response::error("Unauthorized", 401);
+            }
 
             let allowed_id = env
                 .secret("TELEGRAM_ALLOWED_USER_ID")?
@@ -60,7 +61,6 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 return Response::ok("Not a message");
             }
             let user_id = parsed["message"]["from"]["id"].as_i64().unwrap();
-
             if user_id != allowed_id {
                 return Response::error("Unauthorized", 401);
             }
@@ -76,16 +76,38 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                     Response::ok("Push triggered")
                 }
                 "/clear" => {
-                    let bot = api::telegram::Telegram::new(
-                        env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
-                        env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
-                    );
-
                     let db = env.d1("DB").unwrap();
                     d1::cleanup_activities(&db).await.unwrap();
-
-                    bot.send("Database cleared").await.unwrap();
+                    api::telegram::Telegram::new(
+                        env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
+                        env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
+                    )
+                    .send("Database cleared")
+                    .await
+                    .unwrap();
                     Response::ok("Database cleared")
+                }
+                "/refresh" => {
+                    let ticktick = api::ticktick::TickTick::new(
+                        env.secret("TICKTICK_CLIENT_ID").unwrap().to_string(),
+                        env.secret("TICKTICK_CLIENT_SECRET").unwrap().to_string(),
+                        env.secret("TICKTICK_PROJECT_ID").unwrap().to_string(),
+                        kv.clone(),
+                    )
+                    .await;
+
+                    ticktick
+                        .login(
+                            &api::telegram::Telegram::new(
+                                env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
+                                env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
+                            ),
+                            &env.secret("REDIRECT_URI").unwrap().to_string(),
+                            kv,
+                        )
+                        .await
+                        .unwrap();
+                    Response::ok("Refresh triggered")
                 }
                 _ => Response::ok("Unknown command"),
             }
@@ -104,23 +126,6 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 .auth(url, &env.secret("REDIRECT_URI").unwrap().to_string(), kv)
                 .await
                 .unwrap();
-            Response::ok("Success")
-        }
-        Some(&"refresh") => {
-            let ticktick = api::ticktick::TickTick::new(
-                env.secret("TICKTICK_CLIENT_ID").unwrap().to_string(),
-                env.secret("TICKTICK_CLIENT_SECRET").unwrap().to_string(),
-                env.secret("TICKTICK_PROJECT_ID").unwrap().to_string(),
-                kv.clone(),
-            )
-            .await;
-            let bot = api::telegram::Telegram::new(
-                env.secret("TELEGRAM_TOKEN").unwrap().to_string(),
-                env.secret("TELEGRAM_CHAT_ID").unwrap().to_string(),
-            );
-            let redirect_uri = env.secret("REDIRECT_URI").unwrap().to_string();
-            ticktick.login(&bot, &redirect_uri, kv).await.unwrap();
-
             Response::ok("Success")
         }
         _ => Response::error("Not Found", 404),

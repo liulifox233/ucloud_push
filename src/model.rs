@@ -52,6 +52,7 @@ pub struct Task {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Resource {
     pub resource_id: String,
     pub resource_name: String,
@@ -90,6 +91,7 @@ pub struct Detail {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ResourceDetail {
     pub storage_id: String,
     pub name: String,
